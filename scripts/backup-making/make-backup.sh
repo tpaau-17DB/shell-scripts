@@ -3,12 +3,12 @@
 #
 # Customizable shell script to automate backup making process
 #
-# Requirements: tar and optionally notify-send
+# Requires `tar` to run.
 #
 
 notify_user=1
 HOME="/home/user/"
-to_backup="${HOME}"
+to_backup="make-backup.sh ${HOME}Documents/ ${HOME}Downloads/ ${HOME}.local/ ${HOME}.config/ ${HOME}gitrepos/ ${HOME}Pictures/ ${HOME}Songs"
 drive_path="/mnt/drive1/"
 file_name="backup.tar.gz"
 backup_location="${drive_path}${file_name}"
@@ -38,8 +38,8 @@ else
   echo "The file $backup_location does not exist. Proceeding with the operation."
 fi
 
-sudo tar -cvpzf "${file_name}" "${to_backup}" && \
-sudo mv "${file_name}" "${backup_location}"
+sudo tar -cvpzf "${file_name} " ${to_backup} && \
+sudo mv "${file_name} " ${backup_location}
 
 if [ $? -eq 0 ]; then
     if [ $notify_user -eq 1 ]; then
