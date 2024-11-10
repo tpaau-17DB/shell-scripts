@@ -1,4 +1,4 @@
-#!/bin/python3
+#!/usr/bin/python3
 
 """
 This script automates a project I had to do.
