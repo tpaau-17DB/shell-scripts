@@ -15,8 +15,10 @@ import subprocess
 import time
 from requests_html import HTMLSession
 
+# No main function, its just a shell script
 time.sleep(10)
 try:
+    # Its a mess
     formatted_date = datetime.now().strftime("%Y-%m-%d-%H-%M")
     session = HTMLSession()
 

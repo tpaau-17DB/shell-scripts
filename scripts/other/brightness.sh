@@ -3,7 +3,7 @@
 #
 # Modified version of the waybar brightness script.
 #
-# Requirements: brightnessctl and optionally notify-send
+# Requirements: bash, brightnessctl and optionally notify-send
 #
 
 iDIR="$HOME/.config/HyprV/mako/icons"

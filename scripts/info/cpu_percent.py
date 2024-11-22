@@ -10,6 +10,7 @@ Requirements: python3 and psutil
 import sys
 import psutil
 
+# Print the bar
 def print_loading_bar(value, max_value, length = 30, fill = '#'):
     """
     Method used to quickly create loading bars
@@ -20,6 +21,7 @@ def print_loading_bar(value, max_value, length = 30, fill = '#'):
     print(f' [{loading_bar}]')
     sys.stdout.flush()
 
+# Get the cpu usage and print it as a bar
 def print_cpu_usage():
     while True:
         cpu_usage = psutil.cpu_percent(interval=1)

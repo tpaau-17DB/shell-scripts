@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #
-# This script is used to print song info in format
+# This script is used to print song status in format
 # ♫ [X%] song - artist
 # It was desinged to be used with waybar.
 #
@@ -9,6 +9,7 @@
 #
 
 
+# Get the song percent
 song_percent() 
 {
     position=$(playerctl position)
@@ -51,6 +52,7 @@ if [[ "$1" == "click" ]]; then
 fi
 
 # Display audio status
+# The main function, it looks like mess, need to clean this up
 while true; do 
     player_status=$(playerctl status)
     if [ "$player_status" = "Playing" ]; then
