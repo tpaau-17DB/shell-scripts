@@ -9,17 +9,25 @@
 # Send a notification when finished
 notify_user=1
 
-# Various paths, their names are pretty self-explanatory
-HOME="/home/user/"
-to_backup="make-backup.sh ${HOME}Documents/ ${HOME}Downloads/ ${HOME}.local/ ${HOME}.config/ ${HOME}gitrepos/ ${HOME}Pictures/ ${HOME}Songs"
-drive_path="/mnt/drive1/"
+# Various paths
+to_backup="make-backup.sh $HOME/Documents/ $HOME/Downloads/ $HOME/.config/ $HOME/gitrepos/ $HOME/Pictures/ $HOME/Songs $HOME/AndroidStudioProjects/ $HOME/aa-prof-bak/ $HOME/etc/ $HOME/share/"
+drive_path="/mnt/crypt1/"
 file_name="backup.tar.gz"
 backup_location="${drive_path}${file_name}"
+
+handle_exit()
+{
+    echo "Interrupted by user."
+    exit 0
+}
+
+# Handle user interruption
+trap handle_exit SIGINT
 
 echo "Backup location: $backup_location"
 
 if ! [ -e "${drive_path}" ]; then
-    echo "Path does not exist"
+    echo "Path $drive_path does not exist!"
     exit 1
 fi
 
@@ -42,9 +50,9 @@ else
 fi
 
 # Compress and move the backup
-sudo tar -cvpzf "${file_name} " ${to_backup} && \
-sudo mv "${file_name} " ${backup_location}
+sudo bash -c "tar -cvpzf $file_name $to_backup && mv $file_name $backup_location"
 
+# Notify the user
 if [ $? -eq 0 ]; then
     if [ $notify_user -eq 1 ]; then
         echo "Backup completed successfully."
