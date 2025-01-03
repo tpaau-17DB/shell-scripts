@@ -6,7 +6,7 @@
 # Requirements: bash, brightnessctl and optionally notify-send
 #
 
-iDIR="$HOME/.config/HyprV/mako/icons"
+DIR="$HOME/.config/HyprV/mako/icons"
 
 # Get brightness
 get_backlight() {

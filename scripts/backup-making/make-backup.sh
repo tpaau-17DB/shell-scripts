@@ -3,15 +3,15 @@
 #
 # Customizable shell script to automate backup making process
 #
-# Dependencies: bash, tar, optionally notify-send
+# Dependencies: bash, tar, optionally libnotify
 #
 
 # Send a notification when finished
 notify_user=1
 
 # Various paths
-to_backup="make-backup.sh $HOME/Documents/ $HOME/Downloads/ $HOME/.config/ $HOME/gitrepos/ $HOME/Pictures/ $HOME/Songs $HOME/AndroidStudioProjects/ $HOME/aa-prof-bak/ $HOME/etc/ $HOME/share/"
-drive_path="/mnt/crypt1/"
+to_backup="make-backup.sh $HOME/"
+drive_path="/mnt/usb1/"
 file_name="backup.tar.gz"
 backup_location="${drive_path}${file_name}"
 

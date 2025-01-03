@@ -8,8 +8,8 @@
 #
 # If that IP address returns a webpage, it is compared to a webpage usually returned by
 # a tor node.
-#
-# Requirements: basically none
+# 
+# Requirements: bash
 #
 
 ip=$(curl -s 'api.ipify.org')

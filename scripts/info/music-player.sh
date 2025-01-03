@@ -5,7 +5,7 @@
 # ♫ [X%] song - artist
 # It was desinged to be used with waybar.
 #
-# Requirements: playerctl, bc
+# Requirements: bash, playerctl, bc
 #
 
 
