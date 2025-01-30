@@ -3,15 +3,15 @@
 #
 # Customizable shell script to automate backup making process
 #
-# Dependencies: bash, tar, optionally libnotify
+# Dependencies: bash, tar, optionally notify-send
 #
 
 # Send a notification when finished
 notify_user=1
 
 # Various paths
-to_backup="make-backup.sh $HOME/"
-drive_path="/mnt/usb1/"
+drive_path="/mnt/usb/"
+to_backup="$HOME/*"
 file_name="backup.tar.gz"
 backup_location="${drive_path}${file_name}"
 
@@ -32,25 +32,25 @@ if ! [ -e "${drive_path}" ]; then
 fi
 
 if [ -f "$backup_location" ]; then
-  read -p "The file $backup_location already exists. Do you want to overwrite it? (y/n): " choice
-  case "$choice" in
-    [Yy]* )
-      echo "You chose to overwrite the file."
-      ;;
-    [Nn]* )
-      exit 0
-      ;;
-    * )
-      echo "Invalid input. Please answer with 'y' or 'n'."
-      exit 1
-      ;;
-  esac
+    read -p "The file $backup_location already exists. Do you want to overwrite it? [y/N]: " choice
+    choice="${choice:-N}"
+    case "$choice" in
+        [Yy]* )
+            echo "You chose to overwrite the file."
+        ;; [Nn]* )
+            echo "$backup_location was not overwritten."
+            exit 0
+        ;; * )
+            echo "Invalid input. Please answer with 'y' or 'n'."
+            exit 1
+        ;;
+    esac
 else
-  echo "The file $backup_location does not exist. Proceeding with the operation."
+    echo "The file $backup_location does not exist. Proceeding with the operation."
 fi
 
 # Compress and move the backup
-sudo bash -c "tar -cvpzf $file_name $to_backup && mv $file_name $backup_location"
+sudo bash -c "tar -cvpzf $backup_location $to_backup" && echo "Compressing the directories finished."
 
 # Notify the user
 if [ $? -eq 0 ]; then
