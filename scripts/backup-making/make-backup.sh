@@ -10,15 +10,15 @@
 notify_user=1
 
 # Various paths
-drive_path="/mnt/usb/"
-to_backup="$HOME/*"
-file_name="backup.tar.gz"
+drive_path="/mnt/usb1/"
+to_backup="$HOME/* $HOME/.*"
+file_name="backup-$(hostname).tar.gz"
 backup_location="${drive_path}${file_name}"
 
 handle_exit()
 {
     echo "Interrupted by user."
-    exit 0
+    exit 1
 }
 
 # Handle user interruption
@@ -53,15 +53,16 @@ fi
 sudo bash -c "tar -cvpzf $backup_location $to_backup" && echo "Compressing the directories finished."
 
 # Notify the user
-if [ $? -eq 0 ]; then
-    if [ $notify_user -eq 1 ]; then
+exit_status=$?
+if [ $notify_user -eq 1 ]; then
+    if [ $exit_status -eq 0 ]; then
         echo "Backup completed successfully."
         notify-send "Backup completed successfully."
-    fi
-else
-    if [ $notify_user -eq 1 ]; then
+    elif [ $exit_status -eq 130 ]; then
+        echo "Interrupded by user."
+        exit 2
+    else
         echo "Backup failed. Please check the logs."
         notify-send -u critical "Backup failed. Please check the logs."
     fi
-    exit 1
 fi
