@@ -21,6 +21,30 @@ progress_bar()
 	printf "\r[${fill// /#}${empty// /-}] ${progress}%%"
 }
 
+check_dependencies()
+{
+	echo -n "Checking dependencies..."
+	status=0
+
+	for cmd in ffmpeg awk grep; do
+        if ! command -v "$cmd" >/dev/null; then
+			if [ $status -eq 0 ]; then
+				echo ""
+				echo "missing: $cmd"
+			else
+				echo "missing: $cmd"
+			fi
+            missing=1
+        fi
+    done
+
+	if [ $status -eq 0 ]; then
+		echo " ok"
+	fi
+
+	return $status
+}
+
 extract_meta()
 {
 	ffmpeg -i "$1" 2>&1 | grep "$2" | head -n 1 | cut -d: -f2- | awk '{$1=$1};1'
@@ -52,8 +76,15 @@ else
 	done
 fi
 
+check_dependencies
+if [ $? -ne 0 ]; then
+    echo "Some dependency checks have failed!"
+    exit 1
+fi
 
 if [ $MODE == "convert" ]; then # CONVERT
+	echo "This mode is currently a WIP."
+	exit 0
 	if [[ $COMMAND == "cmus" ]]; then # CONVERT CMUS
 		exit 0
 	elif [[ $COMAMND == "" ]]; then
