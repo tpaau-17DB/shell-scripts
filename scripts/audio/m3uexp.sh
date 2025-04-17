@@ -1,5 +1,35 @@
 #!/bin/bash
 
+BOLD_WHITE="\033[1;37m"
+BLUE="\033[34m"
+YELLOW="\033[33m"
+RED="\033[31m"
+ESC="\033[0m"
+
+info()
+{
+	if [[ "$2" == *"\\r"* ]]; then
+        echo -en "\r\033[K"
+    fi
+	echo -e${3} "${2}${BOLD_WHITE}[${ESC}${BLUE}i${ESC}${BOLD_WHITE}]${ESC} ${1}" >&2
+}
+
+warning()
+{
+	if [[ "$2" == *"\\r"* ]]; then
+        echo -en "\r\033[K"
+    fi
+	echo -e${3} "${2}${BOLD_WHITE}[${ESC}${YELLOW}W${ESC}${BOLD_WHITE}]${ESC} ${1}" >&2
+}
+
+error()
+{
+	if [[ "$2" == *"\\r"* ]]; then
+        echo -en "\r\033[K"
+    fi
+	echo -e${3} "${2}${BOLD_WHITE}[${ESC}${RED}E${ESC}${BOLD_WHITE}]${ESC} ${1}" >&2
+}
+
 print_usage()
 {
 	echo "m3uconv [mode] [command] [args]"
@@ -25,7 +55,7 @@ progress_bar()
     let left=40-$done
     fill=$(printf "%${done}s")
     empty=$(printf "%${left}s")
-	printf "\r[${fill// /#}${empty// /-}] ${progress}%%" >&2
+	printf "\r[${3}/${4}] [${fill// /#}${empty// /-}] ${progress}%%" >&2
 }
 
 file_accessible()
@@ -35,7 +65,7 @@ file_accessible()
 		if [[ -n "$file" ]]; then
 			return 0
 		else
-			echo -e "\rerror: File '$file' is empty!" >&2
+			error "File '$file' is empty!" "\r"
 		fi
 	else
 		return 2
@@ -45,16 +75,16 @@ file_accessible()
 
 check_dependencies()
 {
-	echo -n "Checking dependencies..."
+	info "Checking dependencies..." "" "n"
 	status=0
 
-	for cmd in ffmpeg awk grep awk head cut pwd cd ls cat date hostname basename dirname; do
+	for cmd in ffprobe grep awk head cut pwd cd ls cat date hostname basename dirname; do
         if ! command -v "$cmd" >/dev/null; then
 			if [ $status -eq 0 ]; then
 				echo ""
-				echo "missing: $cmd"
+				error "missing: $cmd"
 			else
-				echo "missing: $cmd"
+				error "missing: $cmd"
 			fi
             status=1
         fi
@@ -77,17 +107,18 @@ get_m3u_entry() {
 	if [ $status -eq 2 ]; then
 		return 1
 	elif [ $status -ne 0 ]; then
-		echo "error: File not accessible!" >&2
+		error "File not accessible!"
 		return 1
 	fi
 
-    out=$(ffmpeg -i "$file" -f null - 2>&1)
+	out=$(ffprobe -v error -hide_banner -show_format -show_streams -threads $(nproc) "$file" 2>&1)
 	status="$?"
-    if [ $status -eq 183 ]; then
-		echo -e "\rwarning: Likely not an audio file: '$file'" >&2
-		return 1
-    elif [ $status -ne 0 ]; then
-        echo -e "\rerror: Failed extracting some metadata from '$file'" >&2
+    if [ $status -ne 0 ]; then
+		if [[ "$out" == *"Invalid data found when processing input"* ]]; then
+			warning "Likely not an audio file: '$file'                     " "\r"
+			return 1
+		fi
+		error "Failed extracting some metadata from '$file'" "\r"
         return 1
 	fi
 
@@ -96,13 +127,13 @@ get_m3u_entry() {
     genre=$(echo "$out" | grep -i "genre" | head -n 1 | cut -d: -f2- | awk '{$1=$1};1')
 
 	if [[ -z "$title" ]]; then
-		echo -e "\rwarning: Possibly missing title metadata in '$file'" >&2
+		warning "Possibly missing title metadata in '$file'" "\r"
 	fi
 	if [[ -z "$artist" ]]; then
-		echo -e "\rwarning: Possibly missing artist metadata in '$file'" >&2
+		warning "Possibly missing artist metadata in '$file'" "\r"
 	fi
 	if [[ -z "$genre" ]]; then
-		echo -e "\rwarning: Possibly missing genre metadata in '$file'" >&2
+		warning "Possibly missing genre metadata in '$file'" "\r"
 	fi
 
     echo "#EXTLAB:$title"
@@ -124,7 +155,7 @@ m3u_from_paths()
 	playlist_name="$2"
 	prepend="$3"
 
-	echo -e "\rCreating an m3u playlist from paths..." >&2
+	info "Creating an m3u playlist from paths..." "\r"
 
 	echo "#EXTM3U"
 	echo "#PLAYLIST:$playlist_name"
@@ -133,7 +164,7 @@ m3u_from_paths()
 	max=$(echo "$files" | wc -l)
 	echo -e "$files" | while IFS= read -r file; do
 		get_m3u_entry "$file" "$prepend"
-		progress_bar $i $max
+		progress_bar $i $max "1" "1"
 		((i++))
 	done
 }
@@ -148,7 +179,7 @@ MODE=$1
 COMMAND=$2
 
 if [[ -z $MODE ]]; then
-	echo "error: Expected mode!"
+	error "Expected mode!"
 	echo ""
 	print_usage
 	exit 1
@@ -159,14 +190,14 @@ fi
 
 check_dependencies
 if [ $? -ne 0 ]; then
-    echo "error: Some dependency checks have failed!"
+	error "Some dependency checks have failed!"
     exit 1
 fi
 
 if [[ $MODE == "export" ]]; then
 	if [[ $COMMAND == "cmus" ]]; then
-		echo "Exporting cmus playlists..."
-		echo "Creating a temporary directory $TMP_DIR/"
+		info "Exporting cmus playlists..."
+		info "Creating a temporary directory $TMP_DIR/"
 
 		target="$TMP_DIR/$EXPORT_NAME"
 		mkdir -p "$target/"
@@ -179,13 +210,11 @@ if [[ $MODE == "export" ]]; then
 		iter=1
 		playlist_count=$(echo "$playlists" | wc -l)
 		echo -e "$playlists" | while IFS= read -r playlist; do
-			echo -e "\n[$iter/$playlist_count]: $playlist"
-
 			file_accessible "$CMUS_PLAYLISTS/$playlist"
 			if [ $? -eq 0 ]; then
 				songs=$(cat "$CMUS_PLAYLISTS/$playlist")
 
-				echo -e "\rCreating an m3u playlist from paths..." >&2
+				info "Creating an m3u playlist from paths..." "\r"
 
 				echo "#EXTM3U" > "$playlist.m3u" 
 				echo "#PLAYLIST:$playlist" >> "$playlist.m3u"
@@ -197,41 +226,41 @@ if [[ $MODE == "export" ]]; then
 					mkdir -p "$base_dir"
 					cp "$song" "$base_dir"
 					get_m3u_entry "$song" "$base_dir/" >> "$playlist.m3u"
-					progress_bar $subiter $song_count
+					progress_bar $subiter $song_count $iter $playlist_count
 					((subiter++))
 				done
 			fi
 			((iter++))
 		done
 		echo ""
-		echo "Packing up..."
+		info "Packing up..."
 		cd ..
 		tar cf "$previous_wd/$EXPORT_NAME.tar.gz" "$EXPORT_NAME"
-		echo "Exported data as $EXPORT_NAME.tar.gz"
-		echo "Cleaning up..."
+		info "Exported as '$EXPORT_NAME.tar.gz'"
+		info "Cleaning up..."
 		rm -rf "$TMP_DIR/"
-		echo "done."
+		info "All done."
 	elif [[ -z $COMMAND ]]; then
-		echo "error: Expected a command after $MODE"
+		error "Expected a command after $MODE"
 		echo ""
 		print_usage
 		exit 1
 		else
-		echo "error: Unknown command '$COMMAND' for $MODE"
+		error "Unknown command '$COMMAND' for $MODE"
 		echo ""
 		print_usage
 		exit 1
 	fi
 elif [[ $MODE == "import" ]]; then
 	if [[ $COMMAND == "cmus" ]]; then
-		echo "$MODE $COMMAND is currently a WIP"
+		info "'$MODE $COMMAND' is currently a WIP"
 	elif [[ -z $COMMAND ]]; then
-		echo "error: Expected a command after '$MODE'"
+		error "Expected a command after '$MODE'"
 		echo ""
 		print_usage
 		exit 1
 	else
-		echo "error: Unknown command for '$MODE'"
+		error "Unknown command for '$MODE'"
 		echo ""
 		print_usage
 		exit 1
@@ -239,14 +268,14 @@ elif [[ $MODE == "import" ]]; then
 elif [[ $MODE == "create" ]]; then
 	playlist_name=$(basename "$PWD")
 	paths=""
-	echo "Reading from stdin..."
+	info "Reading from stdin..."
 	while read file; do
 		paths+="$file"$'\n'
 	done
 
 	m3u_from_paths "$paths" "$playlist_name" > "$playlist_name.m3u"
 else
-	echo "error: Unknown mode!"
+	error "Unknown mode!"
 	echo ""
 	print_usage
 	exit 1
