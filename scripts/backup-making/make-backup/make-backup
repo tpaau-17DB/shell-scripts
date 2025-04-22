@@ -1,0 +1,221 @@
+#!/bin/bash
+
+BOLD_WHITE="\033[1;37m"
+BLUE="\033[34m"
+YELLOW="\033[33m"
+RED="\033[31m"
+ESC="\033[0m"
+
+print_usage()
+{
+	echo "make-backup.sh [args]"
+	echo ""
+	echo "  i|input=<path(s)>: specify input path(s)"
+	echo "  o|output='<path>': specify the output path"
+	echo "  e|exclude=<path(s)>: specify path(s) to exclude from backup"
+	echo "  p|post_target=<url>: speciy the POST notification target"
+	echo "  t|threads=<n>: specify the number of CPU threads to use"
+	echo ""
+	echo "  -h|--help: show this help message"
+	echo "  -v|--verbose: set verbose tar output"
+	echo "  -s|--silent: don't send system or POST notifications"
+	echo "  -n|--no-date: don't include the current date in backup target"
+}
+
+info()
+{
+	if [[ "$2" == *"\\r"* ]]; then
+        echo -en "\r\033[K"
+    fi
+	echo -e${3} "${2}${BOLD_WHITE}[${ESC}${BLUE}i${ESC}${BOLD_WHITE}]${ESC} ${1}" >&2
+}
+
+warning()
+{
+	if [[ "$2" == *"\\r"* ]]; then
+        echo -en "\r\033[K"
+    fi
+	echo -e${3} "${2}${BOLD_WHITE}[${ESC}${YELLOW}W${ESC}${BOLD_WHITE}]${ESC} ${1}" >&2
+}
+
+error()
+{
+	if [[ "$2" == *"\\r"* ]]; then
+        echo -en "\r\033[K"
+    fi
+	echo -e${3} "${2}${BOLD_WHITE}[${ESC}${RED}E${ESC}${BOLD_WHITE}]${ESC} ${1}" >&2
+}
+
+SILENT=false
+SEND_SYSTEM_NOTIFICATION=true
+
+POST_TARGET=""
+
+# POST notification
+send_post() {
+	if [ ! -z "$POST_TARGET" ]; then
+		curl -d "$1" "$POST_TARGET"
+	fi
+}
+
+# Send a notification
+notify() {
+	message="$1"
+	is_error=$2
+
+	if [ "$is_error" == true ]; then
+		error "$message"
+		if [[ "$SILENT" == false ]] &&\
+			[[ "$SEND_SYSTEM_NOTIFICATION" == true ]]; then
+			notify-send -u critical "$message"
+		fi
+	else
+		info "$message"
+		if [[ "$SILENT" == false ]] &&\
+			[[ "$SEND_SYSTEM_NOTIFICATION" == true ]]; then
+			notify-send -u low "$message"
+		fi
+	fi
+
+	send_post "$message"
+}
+
+check_dependencies()
+{
+	info "Checking dependencies..." "" "n"
+	status=0
+
+	for cmd in tar curl notify-send hostname pigz nproc; do
+        if ! command -v "$cmd" >/dev/null; then
+			if [ $status -eq 0 ]; then
+				echo ""
+				error "missing: $cmd"
+			else
+				error "missing: $cmd"
+			fi
+            status=1
+        fi
+    done
+
+	if [ $status -eq 0 ]; then
+		echo " ok"
+	fi
+
+	return $status
+}
+
+handle_interrupt()
+{
+	info "Interrupted by user."
+    exit 0
+}
+
+# Handle user interruption
+trap handle_interrupt SIGINT
+
+check_dependencies
+if [ $? -ne 0 ]; then
+	error "Some dependency checks have failed!"
+    exit 1
+fi
+
+TO_BACKUP="$HOME/"
+BACKUP_FILE_NAME="backup-$(date +"%d-%m-%Y")-$(hostname).tar.gz"
+BACKUP_LOCATION=""
+EXCLUDE_PATHS=""
+THREADS=$(nproc)
+TAR_VERBOSE=""
+
+for arg in "$@"; do
+	case $arg in
+		o=*|output=*)
+			BACKUP_LOCATION="${arg#*=}"
+			;;
+		i=*|input=*)
+			path="${arg#*=}"
+			TO_BACKUP="${path/#\~/$HOME}"
+			;;
+		p=*|post_target=*)
+			POST_TARGET="${arg#*=}"
+			;;
+		e=*|exclude=*)
+			EXCLUDE_PATHS="${arg#*=}"
+			EXCLUDE_PATHS=$(echo "$EXCLUDE_PATHS" | tr ' ' '\n')
+			;;
+		t=*|threads=*)
+			THREADS="${arg#*=}"
+			;;
+		-h|--help)
+			print_usage
+			exit 0
+			;;
+		-v|--verbose)
+			TAR_VERBOSE="v"
+			;;
+		-s|--silent)
+		    SILENT=true	
+			;;
+		-n|--no-date)
+			BACKUP_FILE_NAME="backup-$(hostname).tar.gz"
+			;;
+		*)
+			error "Unknown argument: '$arg'\n"
+			print_usage
+			exit 1
+			;;
+	esac
+done
+
+EXCLUDE_PATHS+="
+$BACKUP_FILE_NAME"
+
+if [ -z "$BACKUP_LOCATION" ]; then
+	BACKUP_LOCATION="$HOME"
+fi
+
+TARGET="$BACKUP_LOCATION/$BACKUP_FILE_NAME"
+
+if ! [ -e "${BACKUP_LOCATION}" ]; then
+    error "Path $BACKUP_LOCATION does not exist!"
+    exit 1
+fi
+
+info "Backing up '$TO_BACKUP' to '$TARGET'"
+
+if [ -f "$TARGET" ]; then
+    read -p "The file $TARGET already exists. Do you want to overwrite it? [y/N]: " choice
+    choice="${choice:-N}"
+    case "$choice" in
+        [Yy]* )
+            info "You chose to overwrite the file."
+        ;; [Nn]* )
+            info "$TARGET was not overwritten."
+            exit 0
+        ;; * )
+            error "Invalid input. Please answer with 'y' or 'n'."
+            exit 1
+        ;;
+    esac
+else
+     info "The file $TARGET does not exist. Proceeding with the operation."
+fi
+
+while IFS= read -r path; do
+    EXCLUDE_ARGS+=(--exclude="$path")
+done <<< "$EXCLUDE_PATHS"
+
+info "Creating a tar archive, this may take a while..."
+set -o pipefail
+tar --exclude-caches-all "${EXCLUDE_ARGS[@]}" -c${TAR_VERBOSE}pf - "$TO_BACKUP" | pigz -p"$THREADS" > "$TARGET"
+
+# Notify the user
+status=$?
+if [ $status -eq 0 ]; then
+	notify "Backup completed successfully."
+elif [ $status -eq 130 ]; then
+	notify "Interrupded by user." 
+	exit $status
+else
+	notify "Backup failed, exit code $status. Please check the logs." "true"
+	exit $status
+fi

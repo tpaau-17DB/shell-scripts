@@ -3,7 +3,7 @@
 """
 Just a script that returns a random MAC address
 
-Requirements: pyhon3
+Requirements: pyhon, python-random
 """
 
 import random
