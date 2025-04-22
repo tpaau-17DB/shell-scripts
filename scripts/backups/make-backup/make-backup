@@ -6,21 +6,22 @@ YELLOW="\033[33m"
 RED="\033[31m"
 ESC="\033[0m"
 
-print_usage()
-{
-	echo "make-backup.sh [args]"
-	echo ""
-	echo "  i|input=<path(s)>: specify input path(s)"
-	echo "  o|output='<path>': specify the output path"
-	echo "  e|exclude=<path(s)>: specify path(s) to exclude from backup"
-	echo "  p|post_target=<url>: speciy the POST notification target"
-	echo "  t|threads=<n>: specify the number of CPU threads to use"
-	echo ""
-	echo "  -h|--help: show this help message"
-	echo "  -v|--verbose: set verbose tar output"
-	echo "  -s|--silent: don't send system or POST notifications"
-	echo "  -n|--no-date: don't include the current date in backup target"
+print_usage() {
+  echo -e "\033[1mUsage:\033[0m \033[32mmake-backup.sh [args]\033[0m\n"
+
+  echo -e "\033[1mArguments:\033[0m"
+  echo -e "  \033[36mi\033[0m|\033[36minput=<path(s)>\033[0m       - Specify input path(s)"
+  echo -e "  \033[36mo\033[0m|\033[36moutput='<path>'\033[0m       - Specify the output path"
+  echo -e "  \033[36me\033[0m|\033[36mexclude=<path(s)>\033[0m     - Specify path(s) to exclude from backup"
+  echo -e "  \033[36mp\033[0m|\033[36mpost_target=<url>\033[0m     - Specify the POST notification target"
+  echo -e "  \033[36mt\033[0m|\033[36mthreads=<n>\033[0m           - Specify the number of CPU threads to use\n"
+
+  echo -e "  \033[33m-h\033[0m|\033[33m--help\033[0m               - Show this help message"
+  echo -e "  \033[33m-v\033[0m|\033[33m--verbose\033[0m            - Set verbose tar output"
+  echo -e "  \033[33m-s\033[0m|\033[33m--silent\033[0m             - Don't send system or POST notifications"
+  echo -e "  \033[33m-n\033[0m|\033[33m--no-date\033[0m            - Don't include the current date in backup target"
 }
+
 
 info()
 {
@@ -187,9 +188,9 @@ if [ -f "$TARGET" ]; then
     choice="${choice:-N}"
     case "$choice" in
         [Yy]* )
-            info "You chose to overwrite the file."
+            info "Proceeding."
         ;; [Nn]* )
-            info "$TARGET was not overwritten."
+            info "OK"
             exit 0
         ;; * )
             error "Invalid input. Please answer with 'y' or 'n'."
@@ -201,12 +202,15 @@ else
 fi
 
 while IFS= read -r path; do
-    EXCLUDE_ARGS+=(--exclude="$path")
+	if [ ! -z $path ]; then
+		EXCLUDE_ARGS+=(--exclude="$path")
+	fi
 done <<< "$EXCLUDE_PATHS"
 
 info "Creating a tar archive, this may take a while..."
 set -o pipefail
 tar --exclude-caches-all "${EXCLUDE_ARGS[@]}" -c${TAR_VERBOSE}pf - "$TO_BACKUP" | pigz -p"$THREADS" > "$TARGET"
+
 
 # Notify the user
 status=$?

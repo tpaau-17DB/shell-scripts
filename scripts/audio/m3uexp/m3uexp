@@ -30,21 +30,20 @@ error()
 	echo -e${3} "${2}${BOLD_WHITE}[${ESC}${RED}E${ESC}${BOLD_WHITE}]${ESC} ${1}" >&2
 }
 
-print_usage()
-{
-	echo "m3uconv [mode] [command] [args]"
-	echo ""
-	echo "modes:"
-	echo "  export: Pack playlists and audio files to a tarball"
-	echo "    cmus: Use cmus playlists as the source"
-	echo ""
-	echo "  import: Import data from a tarball"
-	echo "    cmus: Import the playlists to cmus"
-	echo ""
-	echo "  create: Create an m3u playlist from a list of paths"
-	echo ""
-	echo "args:"
-	echo "  --help: Show this help message"
+print_usage() {
+  echo -e "\033[1mUsage:\033[0m \033[32mm3uconv [mode] [command] [args]\033[0m\n"
+
+  echo -e "\033[1mModes:\033[0m"
+  echo -e "  \033[36mexport\033[0m  - Pack playlists and audio files to a tarball"
+  echo -e "    \033[35mcmus\033[0m   - Use cmus playlists as the source\n"
+
+  echo -e "  \033[36mimport\033[0m  - Import data from a tarball"
+  echo -e "    \033[35mcmus\033[0m   - Import the playlists to cmus\n"
+
+  echo -e "  \033[36mcreate\033[0m  - Create an m3u playlist from a list of paths\n"
+
+  echo -e "\033[1mArgs:\033[0m"
+  echo -e "  \033[33m--help\033[0m  - Show this help message"
 }
 
 # Print a progress bar
