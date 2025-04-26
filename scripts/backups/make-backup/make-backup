@@ -7,7 +7,7 @@ RED="\033[31m"
 ESC="\033[0m"
 
 print_usage() {
-  echo -e "\033[1mUsage:\033[0m \033[32mmake-backup.sh [args]\033[0m\n"
+  echo -e "\033[1mUsage:\033[0m \033[32mmake-backup [args]\033[0m\n"
 
   echo -e "\033[1mArguments:\033[0m"
   echo -e "  \033[36mi\033[0m|\033[36minput=<path(s)>\033[0m       - Specify input path(s)"

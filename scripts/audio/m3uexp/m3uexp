@@ -31,19 +31,26 @@ error()
 }
 
 print_usage() {
-  echo -e "\033[1mUsage:\033[0m \033[32mm3uconv [mode] [command] [args]\033[0m\n"
+  echo -e "\033[1mUsage:\033[0m \033[32mm3uexp [mode] [command] [args]\033[0m\n"
 
   echo -e "\033[1mModes:\033[0m"
-  echo -e "  \033[36mexport\033[0m  - Pack playlists and audio files to a tarball"
-  echo -e "    \033[35mcmus\033[0m   - Use cmus playlists as the source\n"
+  echo -e "  \033[36mexport\033[0m             Package playlists and audio files into a tarball"
+  echo -e "    \033[35mcmus:<playlist>\033[0m  Use cmus playlists as the source\n"
 
-  echo -e "  \033[36mimport\033[0m  - Import data from a tarball"
-  echo -e "    \033[35mcmus\033[0m   - Import the playlists to cmus\n"
+  echo -e "  \033[36mimport\033[0m             Import data from a tarball"
+  echo -e "    \033[35mcmus:<playlist>\033[0m  Import playlists into cmus\n"
 
-  echo -e "  \033[36mcreate\033[0m  - Create an m3u playlist from a list of paths\n"
+  echo -e "  \033[36mcreate\033[0m             Create an M3U playlist from a list of paths\n"
 
   echo -e "\033[1mArgs:\033[0m"
-  echo -e "  \033[33m--help\033[0m  - Show this help message"
+  echo -e "  \033[33m-h\033[0m | \033[33m--help\033[0m        Show this help message"
+  echo -e "  \033[36mt\033[0m | \033[36mthreads=<n>\033[0m    Set the number of CPU threads to use"
+}
+
+clean_cache()
+{
+	info "Cleaning up..."
+	rm -rf "$TMP_DIR/"
 }
 
 # Print a progress bar
@@ -77,11 +84,10 @@ check_dependencies()
 	info "Checking dependencies..." "" "n"
 	status=0
 
-	for cmd in ffprobe grep awk head cut pwd cd ls cat date hostname basename dirname; do
+	for cmd in ffprobe grep awk head cut pwd cd ls cat date hostname basename dirname nproc pigz; do
         if ! command -v "$cmd" >/dev/null; then
 			if [ $status -eq 0 ]; then
-				echo ""
-				error "missing: $cmd"
+				error "\nmissing: $cmd"
 			else
 				error "missing: $cmd"
 			fi
@@ -168,23 +174,88 @@ m3u_from_paths()
 	done
 }
 
+ensure_no_cache()
+{
+	if [ -e "$TMP_DIR" ]; then
+		warning "The cache directory is present, likely because m3uexp did not exit cleanly last time."
+		read -p "Do you want to clean the cache? [Y/n]: " choice
+		choice="${choice:-Y}"
+		case "$choice" in
+			[Yy]* )
+				clean_cache
+			;; [Nn]* )
+				info "ok."
+			;; * )
+				error "Invalid input. Please answer with 'y' or 'n'."
+				exit 1
+			;;
+		esac
+	fi
+}
+
 set -o pipefail
 
 CMUS_PLAYLISTS="$HOME/.config/cmus/playlists"
 TMP_DIR="$HOME/.m3uexp"
 EXPORT_NAME="cmus-export-$(date +"%d-%m-%Y")-$(hostname)"
 
-MODE=$1
-COMMAND=$2
+MODE=""
+COMMAND=""
+SELECT=""
+
+THREADS=$(nproc)
+
+command_next=false
+for arg in "$@"; do
+	if [[ $command_next == false ]]; then
+		case $arg in
+			export|import)
+				MODE="$arg"
+				command_next=true
+				;;
+			t=*|threads=*)
+				THREADS="${arg#*=}"
+				;;
+			-h|--help)
+				print_usage
+				exit 0
+				;;
+			*)
+				error "Unknown argument: '$arg'\n"
+				print_usage
+				exit 1
+				;;
+		esac
+	else
+		case $arg in
+			cmus*)
+				IFS=':' read -r command select <<< "$arg"
+				COMMAND="$command"
+				SELECT="$select"
+				if [ -z $SELECT ]; then
+					error "Expected playlist name after 'cmus:'\n"
+					print_usage
+					exit 1
+				fi
+				;;
+			*)
+				error "Unknown mode for '$MODE': $arg"
+				print_usage
+				exit 1
+				;;
+		esac
+		command_next=false
+	fi
+done
 
 if [[ -z $MODE ]]; then
-	error "Expected mode!"
-	echo ""
+	error "Expected mode!\n"
 	print_usage
 	exit 1
-elif [ $MODE == "--help" ]; then
+elif [[ -z $COMMAND ]]; then
+	error "Expected command after '$MODE'!\n"
 	print_usage
-	exit 0
+	exit 1
 fi
 
 check_dependencies
@@ -193,74 +264,81 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
+ensure_no_cache
+
 if [[ $MODE == "export" ]]; then
 	if [[ $COMMAND == "cmus" ]]; then
-		info "Exporting cmus playlists..."
-		info "Creating a temporary directory $TMP_DIR/"
+		if [ $SELECT == "all" ]; then
+			info "Exporting cmus playlists..."
+			info "Creating a temporary directory $TMP_DIR/"
 
-		target="$TMP_DIR/$EXPORT_NAME"
-		mkdir -p "$target/"
+			target="$TMP_DIR/$EXPORT_NAME"
+			mkdir -p "$target/"
 
-		previous_wd=$(pwd)
-		cd "$target"
+			previous_wd=$(pwd)
+			cd "$target"
 
-		playlists=$(ls "$CMUS_PLAYLISTS/")
+			playlists=$(ls "$CMUS_PLAYLISTS/")
 
-		iter=1
-		playlist_count=$(echo "$playlists" | wc -l)
-		echo -e "$playlists" | while IFS= read -r playlist; do
-			file_accessible "$CMUS_PLAYLISTS/$playlist"
-			if [ $? -eq 0 ]; then
-				songs=$(cat "$CMUS_PLAYLISTS/$playlist")
+			iter=1
+			playlist_count=$(echo "$playlists" | wc -l)
+			echo -e "$playlists" | while IFS= read -r playlist; do
+				file_accessible "$CMUS_PLAYLISTS/$playlist"
+				if [ $? -eq 0 ]; then
+					songs=$(cat "$CMUS_PLAYLISTS/$playlist")
 
-				info "Creating an m3u playlist from paths..." "\r"
+					info "Creating an m3u playlist from paths..." "\r"
 
-				echo "#EXTM3U" > "$playlist.m3u" 
-				echo "#PLAYLIST:$playlist" >> "$playlist.m3u"
+					echo "#EXTM3U" > "$playlist.m3u" 
+					echo "#PLAYLIST:$playlist" >> "$playlist.m3u"
 
-				subiter=1
-				song_count=$(echo "$songs" | wc -l)
-				echo -e "$songs" | while IFS= read -r song; do
-					base_dir=$(basename $(dirname "$song"))
-					mkdir -p "$base_dir"
-					cp "$song" "$base_dir"
-					get_m3u_entry "$song" "$base_dir/" >> "$playlist.m3u"
-					progress_bar $subiter $song_count $iter $playlist_count
-					((subiter++))
-				done
-			fi
-			((iter++))
-		done
-		echo ""
-		info "Packing up..."
-		cd ..
-		tar cf "$previous_wd/$EXPORT_NAME.tar.gz" "$EXPORT_NAME"
-		info "Exported as '$EXPORT_NAME.tar.gz'"
-		info "Cleaning up..."
-		rm -rf "$TMP_DIR/"
-		info "All done."
-	elif [[ -z $COMMAND ]]; then
-		error "Expected a command after $MODE"
-		echo ""
-		print_usage
-		exit 1
+					subiter=1
+					song_count=$(echo "$songs" | wc -l)
+					echo -e "$songs" | while IFS= read -r song; do
+						base_dir=$(basename $(dirname "$song"))
+						mkdir -p "$base_dir"
+						cp "$song" "$base_dir"
+						get_m3u_entry "$song" "$base_dir/" >> "$playlist.m3u"
+						progress_bar $subiter $song_count $iter $playlist_count
+						((subiter++))
+					done
+				fi
+				((iter++))
+			done
+			echo ""
+			info "Packing up..."
+			cd ..
+			tar cf - "$EXPORT_NAME" | pigz -p${THREADS} > "$previous_wd/$EXPORT_NAME.tar.gz"
+			info "Exported as '$EXPORT_NAME.tar.gz'"
+			clean_cache
 		else
-		error "Unknown command '$COMMAND' for $MODE"
-		echo ""
+			playlist="$CMUS_PLAYLISTS/$SELECT"
+			if [[ -e "$playlist" ]]; then
+				file_accessible "$playlist"
+				if [ $? -eq 0 ]; then
+					files=$(cat "$playlist")
+					m3u_from_paths "$files" "$SELECT" > "$SELECT.m3u"
+				else
+					error "Playlist not accessible: '$playlist'"
+					exit 1
+				fi
+			else
+				error "Playlist does not exist: '$playlist'"
+				info "Please select one of the following:"
+				ls "$CMUS_PLAYLISTS"
+				exit 1
+			fi
+		fi
+	else
+		error "Unknown command '$COMMAND' for $MODE\n"
 		print_usage
 		exit 1
 	fi
 elif [[ $MODE == "import" ]]; then
 	if [[ $COMMAND == "cmus" ]]; then
 		info "'$MODE $COMMAND' is currently a WIP"
-	elif [[ -z $COMMAND ]]; then
-		error "Expected a command after '$MODE'"
-		echo ""
-		print_usage
-		exit 1
 	else
-		error "Unknown command for '$MODE'"
-		echo ""
+		error "Unknown command for '$MODE'\n"
 		print_usage
 		exit 1
 	fi
@@ -274,8 +352,7 @@ elif [[ $MODE == "create" ]]; then
 
 	m3u_from_paths "$paths" "$playlist_name" > "$playlist_name.m3u"
 else
-	error "Unknown mode!"
-	echo ""
+	error "Unknown mode!\n"
 	print_usage
 	exit 1
 fi
