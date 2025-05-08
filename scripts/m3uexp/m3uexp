@@ -133,12 +133,15 @@ get_m3u_entry() {
 
 	if [[ -z "$title" ]]; then
 		warning "Possibly missing title metadata in '$file'" "\r"
+		title="Unknown"
 	fi
 	if [[ -z "$artist" ]]; then
 		warning "Possibly missing artist metadata in '$file'" "\r"
+		artist="Unknown"
 	fi
 	if [[ -z "$genre" ]]; then
 		warning "Possibly missing genre metadata in '$file'" "\r"
+		genre="Unknown"
 	fi
 
     echo "#EXTLAB:$title"
