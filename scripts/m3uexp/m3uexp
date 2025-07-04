@@ -47,7 +47,7 @@ print_usage() {
   echo -e "  \033[36mt\033[0m | \033[36mthreads=<n>\033[0m    Set the number of CPU threads to use"
 }
 
-clean_cache()
+clean_tmp()
 {
 	info "Cleaning up..."
 	rm -rf "$TMP_DIR/"
@@ -56,17 +56,17 @@ clean_cache()
 # Print a progress bar
 progress_bar()
 {
-    let progress=(${1}*100/${2}*100)/100
-    let done=(${progress}*4)/10
-    let left=40-$done
-    fill=$(printf "%${done}s")
-    empty=$(printf "%${left}s")
+	local progress=$(( ($1 * 100 / $2 * 100) / 100 ))
+	local done=$(( (progress * 4) / 10))
+	local left=$(( 40 - done ))
+    local fill=$(printf "%${done}s")
+    local empty=$(printf "%${left}s")
 	printf "\r[${3}/${4}] [${fill// /#}${empty// /-}] ${progress}%%" >&2
 }
 
 file_accessible()
 {
-	file="$1"
+	local file="$1"
 	if [ -e "$file" ]; then
 		if [[ -n "$file" ]]; then
 			return 0
@@ -82,7 +82,7 @@ file_accessible()
 check_dependencies()
 {
 	info "Checking dependencies..." "" "n"
-	status=0
+	local status=0
 
 	for cmd in ffprobe grep awk head cut pwd cd ls cat date hostname basename dirname nproc pigz; do
         if ! command -v "$cmd" >/dev/null; then
@@ -104,11 +104,11 @@ check_dependencies()
 
 # Get a single m3u entry from path
 get_m3u_entry() {
-    file="$1"
-	prepend="$2"
+    local file="$1"
+	local prepend="$2"
 	
 	file_accessible "$1"
-	status="$?"
+	local status="$?"
 	if [ $status -eq 2 ]; then
 		return 1
 	elif [ $status -ne 0 ]; then
@@ -116,7 +116,7 @@ get_m3u_entry() {
 		return 1
 	fi
 
-	out=$(ffprobe -v error -hide_banner -show_format -show_streams -threads $(nproc) "$file" 2>&1)
+	local out=$(ffprobe -v error -hide_banner -show_format "$file" 2>&1)
 	status="$?"
     if [ $status -ne 0 ]; then
 		if [[ "$out" == *"Invalid data found when processing input"* ]]; then
@@ -127,9 +127,9 @@ get_m3u_entry() {
         return 1
 	fi
 
-    title=$(echo "$out" | grep -i "title" | head -n 1 | cut -d: -f2- | awk '{$1=$1};1')
-    artist=$(echo "$out" | grep -i "artist" | head -n 1 | cut -d: -f2- | awk '{$1=$1};1')
-    genre=$(echo "$out" | grep -i "genre" | head -n 1 | cut -d: -f2- | awk '{$1=$1};1')
+    local title=$(echo "$out" | grep -v "Cover" | grep -i "title" | head -n 1 | cut -d: -f2- | awk '{$1=$1};1')
+    local artist=$(echo "$out" | grep -i "artist" | head -n 1 | cut -d: -f2- | awk '{$1=$1};1')
+    local genre=$(echo "$out" | grep -i "genre" | head -n 1 | cut -d: -f2- | awk '{$1=$1};1')
 
 	if [[ -z "$title" ]]; then
 		warning "Possibly missing title metadata in '$file'" "\r"
@@ -159,17 +159,17 @@ get_m3u_entry() {
 # Get a m3u entries from a list of files
 m3u_from_paths()
 {
-	files="$1"
-	playlist_name="$2"
-	prepend="$3"
+	local files="$1"
+	local playlist_name="$2"
+	local prepend="$3"
 
 	info "Creating an m3u playlist from paths..." "\r"
 
 	echo "#EXTM3U"
 	echo "#PLAYLIST:$playlist_name"
 
-	i=1
-	max=$(echo "$files" | wc -l)
+	local i=1
+	local max=$(echo "$files" | wc -l)
 	echo -e "$files" | while IFS= read -r file; do
 		get_m3u_entry "$file" "$prepend"
 		progress_bar $i $max "1" "1"
@@ -177,15 +177,15 @@ m3u_from_paths()
 	done
 }
 
-ensure_no_cache()
+ensure_no_tmp()
 {
 	if [ -e "$TMP_DIR" ]; then
-		warning "The cache directory is present, likely because m3uexp did not exit cleanly last time."
-		read -p "Do you want to clean the cache? [Y/n]: " choice
-		choice="${choice:-Y}"
+		warning "The tmp directory is present, likely because m3uexp did not exit cleanly last time."
+		read -p "Do you want to clean tmp? [Y/n] " choice
+		local choice="${choice:-Y}"
 		case "$choice" in
 			[Yy]* )
-				clean_cache
+				clean_tmp
 			;; [Nn]* )
 				info "ok."
 			;; * )
@@ -267,7 +267,7 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-ensure_no_cache
+ensure_no_tmp
 
 if [[ $MODE == "export" ]]; then
 	if [[ $COMMAND == "cmus" ]]; then
@@ -313,7 +313,7 @@ if [[ $MODE == "export" ]]; then
 			cd ..
 			tar cf - "$EXPORT_NAME" | pigz -p${THREADS} > "$previous_wd/$EXPORT_NAME.tar.gz"
 			info "Exported as '$EXPORT_NAME.tar.gz'"
-			clean_cache
+			clean_tmp
 		else
 			playlist="$CMUS_PLAYLISTS/$SELECT"
 			if [[ -e "$playlist" ]]; then

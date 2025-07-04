@@ -210,7 +210,7 @@ done <<< "$EXCLUDE_PATHS"
 info "Creating a tar archive, this may take a while..."
 set -o pipefail
 tar --exclude-caches-all "${EXCLUDE_ARGS[@]}" -c${TAR_VERBOSE}pf - "$TO_BACKUP" | pigz -p"$THREADS" > "$TARGET"
-
+chmod 400 "$TARGET"
 
 # Notify the user
 status=$?
